@@ -57,9 +57,7 @@ Add `-a claude-code`, `-a codex`, or `-a antigravity` for a single harness. Invo
 
 ## Repo layout
 
-- `skills/state-audit/SKILL.md`: core two-pass workflow, admission gate, evidence rules, and on-request visual/formal handoff
-- `skills/state-audit/references/patterns.md`: concurrency, retry, lease/fencing, DB/effect divergence, and resource-ownership bug classes
-- `skills/state-audit/references/languages.md`: explicit-state idioms and gotchas for Rust, Python, Java, C++, and TypeScript
+- `skills/state-audit/SKILL.md`: single-file skill covering the two-pass workflow, admission gate, evidence rules, hazard checklist, and on-request visual/formal handoff
 
 ## Sources and inspiration
 
