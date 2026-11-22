@@ -58,11 +58,3 @@ Add `-a claude-code`, `-a codex`, or `-a antigravity` for a single harness. Invo
 ## Repo layout
 
 - `skills/state-audit/SKILL.md`: single-file skill covering the two-pass workflow, admission gate, evidence rules, hazard checklist, and on-request visual/formal handoff
-
-## Sources and inspiration
-
-- Steve Ruiz: ["find all of the implicit state machines in my app"](https://x.com/steveruizok/status/2116552016218710389) and David Khourshid's statechart work
-- Trevin Chow: [invariants, transition tables, and retry/concurrency audit prompt](https://x.com/trevin/status/2118690987153186845)
-- Lauren Tan (`@poteto`): [pstack](https://github.com/cursor/plugins/tree/main/pstack) (`/statechart`, `/create-formal-verification-skill`)
-- Gary Bernhardt: [false-positive critique](https://x.com/garybernhardt/status/2121168309467140145) and QuickReview: [state-machine review benchmark](https://quickchat.ai/post/implicit-state-machines-hide-bugs-that-line-by-line-review-approves)
-- Community skills: `dzhng/skills`, `waynesutton/builder-skills`, `Vaultite/vaultite`, and `statelyai/skills`
