@@ -39,7 +39,7 @@ Late completions check `state.kind === "loading" && state.attemptId === id` befo
 ## What makes it low-noise
 
 - **Mechanical admission gate:** admits a candidate only when 2+ fields jointly encode one lifecycle, 2+ storage writes mutate one status field, a persisted status crosses a process/network boundary or triggers external effects, or async/resource ownership depends on an implicit mode. Drops independent toggles and orthogonal flags.
-- **Strict evidence split:** separates `Confirmed` (reproduced by a failing test), `Traced` (`file:line` path with overlap rationale), `Hypothesis` (unranked), and `No traced hazard in scope`.
+- **Strict evidence split:** separates `Confirmed` (reproduced by a failing test), `Traced` (`file:line` path with overlap rationale), `Hypothesis` (unranked), `Inspected` (read-only), and `Checked` (exercised by a named test or model).
 - **Two passes, small diffs:** Pass 1 edits no product code and writes `STATE_MACHINES.md`. Pass 2 fixes one approved machine at a time starting from rung 0 (add the missing guard/generation check) before reaching for unions, reducers, or libraries.
 - **Diagrams and formal checks on request:** text and tables by default; Mermaid `stateDiagram-v2` on request, or handoff to installed statechart/model-checking skills when a traced concurrency bug warrants TLC or Lean.
 

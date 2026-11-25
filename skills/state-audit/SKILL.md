@@ -29,13 +29,14 @@ Watch specifically for hazards models routinely miss:
 - Orphaned child/grandchild processes, inherited FDs blocking EOF, temp dirs deleted under a live child, weak senders dropped before first poll, and detach conflated with cancel.
 - Partial local side effects (e.g. `remove_dir_all`) failing before state updates; DB conditional writes paired with non-atomic external calls (needs outbox or claim-then-recover + idempotency key).
 - Lease expiry without monotonic fencing tokens, at-least-once redelivery, wall-clock TTLs, rolling-deploy enum skew, and authority leaks (e.g. public `setStatus` skipping move authorization).
+- Failures that outlive their cause (cached or memoized transient errors surviving retries) and bounded caches that weigh a slice rather than the backing allocation it retains.
 
 ### Evidence and risk
 Every claim cites `file:line` and one tag:
 - **Confirmed:** reproduced by a failing test or script (Pass 2).
 - **Traced:** concrete step-by-step path; for concurrency, retry, or scheduling bugs, cite why actors overlap or the valid single-thread executor schedule.
 - **Hypothesis:** plausible unguarded gap without a complete reachable path (or crossing out of scope/target). Keep unranked.
-- **No traced hazard in scope:** inspected within coverage with no traced flaw found.
+- **Inspected:** read within coverage with no flaw traced (not a clean verdict); write **Checked** only when a named test, repro, or model exercised a specific property and stated bounds.
 
 Rate **Risk (Likelihood)**: **High** (irrecoverable production/user data loss, money, auth bypass, stuck irreversible workflow; rerunnable dev/benchmark output is Medium), **Medium** (broken user flow, rerunnable data loss, duplicated non-financial effect, leaked process/resource), **Low** (local UI glitch, redundant state); Likelihood `Common` / `Edge` / `Extreme`.
 
@@ -44,9 +45,9 @@ Rate **Risk (Likelihood)**: **High** (irrecoverable production/user data loss, m
 2. **Summary table:** `# | Machine | Axes (Sum/Product) | Evidence | Top Risk (Likelihood) | Key files | Fix rung`.
 3. **Detailed sections (`Traced` only):** states & external storage, transition table `(from, trigger, who, guard [enforced/none/unknown], to, side effects, file:line)`, invariants & exits, trigger path, refactor sketch.
 4. **Unranked hypotheses.**
-5. **Up to 3 next steps** ranked by Risk and Likelihood.
+5. **Up to 3 next steps** ranked by Risk and Likelihood, then any `Inspected` machines whose invariants depend on interacting schedules, retries, cancellation against queued work, shared caches, or option combinations, each nominated for a bounded model or stateful check of the real API even if static reading traced no failure path.
 
-Stop and ask which single machine (if any) to fix first.
+Stop and ask which single machine (if any) to fix or check first.
 
 ## Pass 2: Reproduce and fix (on approval)
 
@@ -61,4 +62,4 @@ Fix **one machine per change** (one representative at a time for clusters). Do n
 Pass 1 is text and tables only. When the user asks for visuals or formal checks:
 - **Model first, bugs as overlay:** draw the intended machine (states, normal transitions, exits) as the base graph, even for clean machines. Layer traced hazards on top as annotations (Mermaid) or toggleable overlays/tabs (HTML if explicitly requested).
 - **Match format to shape:** Mermaid `stateDiagram-v2` for lifecycles, `sequenceDiagram` for concurrency/borrow interleavings, State × Event matrix for 5+ states or cross-cutting events.
-- **Installed skills & formal escalation:** hand off to an installed statechart or formal-verification skill if present. Suggest a model checker/prover only for a `Traced` concurrency, retry, or invariant hazard tests cannot cover, and replay any counterexample against real code before calling it a bug.
+- **Installed skills & formal escalation:** hand off to an installed statechart or formal-verification skill if present. Suggest a model checker/prover for a `Traced` concurrency, retry, or invariant hazard tests cannot cover, or for a nominated `Inspected` machine, and replay any counterexample against real code before calling it a bug.
