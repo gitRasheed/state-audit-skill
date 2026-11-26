@@ -7,7 +7,7 @@ description: "Audit a codebase or module for explicit and implicit state machine
 
 Find the explicit and implicit state machines in scope, map their states, invariants, and transitions, and prove which invalid states or transitions are actually reachable, including through retries and concurrency.
 
-Pass 1 edits no product code: write one untracked `STATE_MACHINES.md` (or the path the user names) and stop. Pass 2 fixes one approved machine at a time behind tests.
+Pass 1 edits no product code: write one untracked `STATE_MACHINES.md` (or the path the user names) and stop. If committed later, keep it strictly current-state (rewrite fixed sections; never append dated changelog sections). Pass 2 fixes one approved machine at a time behind tests.
 
 ## Pass 1: Audit
 
@@ -21,7 +21,7 @@ Admit a candidate **only** if at least one holds:
 Drop immediately: single independent UI toggles, orthogonal product types where all combinations are legal (check sum vs product **per axis** with `file:line`), seq/generation-fenced async writes, pure derived values, static startup config, and behavior already enforced upstream or documented as an accepted limit in repo docs. Empty inventory is a valid stop.
 
 ### Trace and check
-Trace real reads and writes; never infer from names. Before calling anything unguarded or torn, check DB constraints/indexes/triggers, upstream parsers, ownership/`Drop`/RAII sites, filesystem commit markers (atomic rename, `fsync`, lockfiles, manifests), and repo docs. Cluster repeated patterns into one row.
+Trace real reads and writes; never infer from names. Before calling anything unguarded or torn, check DB constraints/indexes/triggers, upstream parsers, ownership/`Drop`/RAII sites, filesystem commit markers (atomic rename, `fsync`, lockfiles, manifests), and repo docs. For every timeout or cancellation boundary, ask: after the caller returns, what work can still produce an effect, and who stops it? Cluster repeated patterns into one row.
 
 Watch specifically for hazards models routinely miss:
 - Non-terminal states with no exit under crash, cancel, timeout, lease expiry, or restart, and self-blocking borrows/locks that block the consumer from draining capacity.
@@ -30,13 +30,14 @@ Watch specifically for hazards models routinely miss:
 - Partial local side effects (e.g. `remove_dir_all`) failing before state updates; DB conditional writes paired with non-atomic external calls (needs outbox or claim-then-recover + idempotency key).
 - Lease expiry without monotonic fencing tokens, at-least-once redelivery, wall-clock TTLs, rolling-deploy enum skew, and authority leaks (e.g. public `setStatus` skipping move authorization).
 - Failures that outlive their cause (cached or memoized transient errors surviving retries) and bounded caches that weigh a slice rather than the backing allocation it retains.
+- UI, realtime, and CLI hazards: level-triggered input read as an edge, focus or lifecycle event ordering differing from handler assumptions, one-tick tears across stepped subsystems, and terminal predicates (`done`, `empty`, `victory`) vacuously true before load or spawn.
 
 ### Evidence and risk
-Every claim cites `file:line` and one tag:
+Every claim cites `symbol (path)` (include `:line` only in an untracked Pass 1 snapshot) and one tag:
 - **Confirmed:** reproduced by a failing test or script (Pass 2).
 - **Traced:** concrete step-by-step path; for concurrency, retry, or scheduling bugs, cite why actors overlap or the valid single-thread executor schedule.
 - **Hypothesis:** plausible unguarded gap without a complete reachable path (or crossing out of scope/target). Keep unranked.
-- **Inspected:** read within coverage with no flaw traced (not a clean verdict); write **Checked** only when a named test, repro, or model exercised a specific property and stated bounds.
+- **Inspected:** read within coverage with no flaw traced (not a clean verdict); write **Checked** only when a named test, repro, or model exercised a specific property, entry point, and bounds (never credit a pure-reducer test with guarding a wiring or integration bug).
 
 Rate **Risk (Likelihood)**: **High** (irrecoverable production/user data loss, money, auth bypass, stuck irreversible workflow; rerunnable dev/benchmark output is Medium), **Medium** (broken user flow, rerunnable data loss, duplicated non-financial effect, leaked process/resource), **Low** (local UI glitch, redundant state); Likelihood `Common` / `Edge` / `Extreme`.
 
