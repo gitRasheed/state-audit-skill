@@ -18,24 +18,24 @@ Admit a candidate **only** if at least one holds:
 - A persisted status drives an external side effect or crosses a process, network, or privilege boundary (exclude single-pass file writes with no stages).
 - Resource ownership or async ordering depends on an implicit mode (timers, sockets, locks, child processes, retries, or `await` followed by a state write without a sequence/generation guard).
 
-Drop immediately: single independent UI toggles, orthogonal product types where all combinations are legal (check sum vs product **per axis** with `file:line`), seq/generation-fenced async writes, pure derived values, static startup config, and behavior already enforced upstream or documented as an accepted limit in repo docs. Empty inventory is a valid stop.
+Drop immediately: single independent UI toggles, orthogonal product types where all combinations are legal (check sum vs product **per axis** with `symbol (path)`), seq/generation-fenced async writes, pure derived values, static startup config, and behavior already enforced upstream or documented as an accepted limit in repo docs. Empty inventory is a valid stop.
 
 ### Trace and check
-Trace real reads and writes; never infer from names. Before calling anything unguarded or torn, check DB constraints/indexes/triggers, upstream parsers, ownership/`Drop`/RAII sites, filesystem commit markers (atomic rename, `fsync`, lockfiles, manifests), and repo docs. For every timeout or cancellation boundary, ask: after the caller returns, what work can still produce an effect, and who stops it? Cluster repeated patterns into one row.
+Trace real reads and writes; never infer from names. Before calling anything unguarded or torn, check DB constraints/indexes/triggers, upstream parsers, ownership/`Drop`/RAII sites, filesystem commit markers (atomic rename, `fsync`, lockfiles, manifests), and repo docs. For a delegated invariant, check which callers or bindings enforce it. For every timeout or cancellation boundary, ask: after the caller returns, what work can still produce an effect, and who stops it? Cluster repeated patterns into one row.
 
 Watch specifically for hazards models routinely miss:
 - Non-terminal states with no exit under crash, cancel, timeout, lease expiry, or restart, and self-blocking borrows/locks that block the consumer from draining capacity.
-- Stale async completions and stale view/ID pointers that reset only on exact match (missing ancestor deletion).
-- Orphaned child/grandchild processes, inherited FDs blocking EOF, temp dirs deleted under a live child, weak senders dropped before first poll, and detach conflated with cancel.
+- Stale async completions, stale view/ID pointers that reset only on exact match (missing ancestor deletion), and multi-file readers that re-resolve a current/latest pointer per open instead of once per operation (torn across an atomic swap).
+- Orphaned child/grandchild processes, inherited FDs blocking EOF, temp dirs deleted under a live child, weak senders dropped before first poll, detach conflated with cancel, and a teardown step that throws and skips later cleanup.
 - Partial local side effects (e.g. `remove_dir_all`) failing before state updates; DB conditional writes paired with non-atomic external calls (needs outbox or claim-then-recover + idempotency key).
-- Lease expiry without monotonic fencing tokens, at-least-once redelivery, wall-clock TTLs, rolling-deploy enum skew, and authority leaks (e.g. public `setStatus` skipping move authorization).
-- Failures that outlive their cause (cached or memoized transient errors surviving retries) and bounded caches that weigh a slice rather than the backing allocation it retains.
+- Lease expiry without monotonic fencing tokens, at-least-once redelivery, wall-clock TTLs, rolling-deploy enum skew, authority leaks (e.g. public `setStatus` skipping move authorization), and cached or memoized transient errors surviving retries.
+- Guards enforced on only some paths: an invariant a lower layer delegates to callers that some adapters, bindings, or execution modes skip; publishers that validate less than the reader or verifier; and rejection checks that fail open on `NaN`, null, or an errored probe.
 - UI, realtime, and CLI hazards: level-triggered input read as an edge, focus or lifecycle event ordering differing from handler assumptions, one-tick tears across stepped subsystems, and terminal predicates (`done`, `empty`, `victory`) vacuously true before load or spawn.
 
 ### Evidence and risk
 Every claim cites `symbol (path)` (include `:line` only in an untracked Pass 1 snapshot) and one tag:
 - **Confirmed:** reproduced by a failing test or script (Pass 2).
-- **Traced:** concrete step-by-step path; for concurrency, retry, or scheduling bugs, cite why actors overlap or the valid single-thread executor schedule.
+- **Traced:** concrete step-by-step path from a real entry point, naming any required configuration; for concurrency, retry, or scheduling bugs, cite why actors overlap or the valid single-thread executor schedule.
 - **Hypothesis:** plausible unguarded gap without a complete reachable path (or crossing out of scope/target). Keep unranked.
 - **Inspected:** read within coverage with no flaw traced (not a clean verdict); write **Checked** only when a named test, repro, or model exercised a specific property, entry point, and bounds (never credit a pure-reducer test with guarding a wiring or integration bug).
 
@@ -44,9 +44,9 @@ Rate **Risk (Likelihood)**: **High** (irrecoverable production/user data loss, m
 ### Report (`STATE_MACHINES.md`)
 1. **Scope, exclusions, and dropped candidates** (date, commit SHA if in git, 1-phrase drop reasons).
 2. **Summary table:** `# | Machine | Axes (Sum/Product) | Evidence | Top Risk (Likelihood) | Key files | Fix rung`.
-3. **Detailed sections (`Traced` only):** states & external storage, transition table `(from, trigger, who, guard [enforced/none/unknown], to, side effects, file:line)`, invariants & exits, trigger path, refactor sketch.
+3. **Detailed sections (`Traced` only):** states & external storage, transition table `(from, trigger, who, guard [enforced/none/unknown], to, side effects, symbol (path))`, invariants & exits, trigger path, refactor sketch.
 4. **Unranked hypotheses.**
-5. **Up to 3 next steps** ranked by Risk and Likelihood, then any `Inspected` machines whose invariants depend on interacting schedules, retries, cancellation against queued work, shared caches, or option combinations, each nominated for a bounded model or stateful check of the real API even if static reading traced no failure path.
+5. **Up to 3 next steps** ranked by Risk and Likelihood, then any `Inspected` machines whose invariants depend on interacting schedules, retries, cancellation against queued work, shared caches, or option combinations, each nominated with a concrete untested schedule or option combination for a bounded model or stateful check of the real API even if static reading traced no failure path.
 
 Stop and ask which single machine (if any) to fix or check first.
 
@@ -56,7 +56,7 @@ Fix **one machine per change** (one representative at a time for clusters). Do n
 1. **Confirm:** write a failing test/repro for each `Traced` bug on the approved machine (`Confirmed`). If unrunnable on this host (e.g. another OS), keep `Traced (unrunnable on host)`; if runnable and it does not fail, downgrade to `Hypothesis`.
 2. **Pin:** test the transitions the fix touches plus illegal combinations.
 3. **Smallest fix rung:** `0` add missing guard/generation check/conditional write in place -> `1` delete or derive redundant state -> `2` collapse mutually exclusive flags into one enum/union owning its data (keep non-serializable handles like `AbortController` in the runner, not state data; avoid `mem::replace` placeholders and catch-all wildcards) -> `3` centralize transitions (plus outbox/claim-then-recover for DB + external effects) -> `4` state-machine library only for 4+ states with nested/parallel async transitions.
-4. **Preserve contracts:** keep public APIs, ordering, and error messages intact unless approved; state the smallest input whose behavior changes for any non-equivalent refactor.
+4. **Preserve contracts:** keep public APIs, ordering, and error messages intact unless approved; state the smallest input whose behavior changes for any non-equivalent refactor. Keep any caller or failure mode the fix leaves exposed (e.g. crash durability) explicit instead of marking the row closed.
 
 ## Diagrams and formal checks (on request)
 
